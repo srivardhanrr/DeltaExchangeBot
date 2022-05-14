@@ -1,1 +1,7 @@
-schedule, telepot, pytelegrambotapi, telebot, delta_rest_client, threading, requests, urllib3, time, math
+schedule
+telepot
+pytelegrambotapi 
+telebot 
+delta_rest_client 
+requests 
+urllib3 

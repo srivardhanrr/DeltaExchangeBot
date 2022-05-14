@@ -10,14 +10,14 @@ import urllib3
 from threading import Thread
 
 
-proxy_url = "http://proxy.server:3128"
-telepot.api._pools = {
-    'default': urllib3.ProxyManager(proxy_url=proxy_url, num_pools=3, maxsize=10, retries=False, timeout=30),
-}
-telepot.api._onetime_pool_spec = (urllib3.ProxyManager, dict(proxy_url=proxy_url, num_pools=1, maxsize=1, retries=False, timeout=30))
+# proxy_url = "http://proxy.server:3128"
+# telepot.api._pools = {
+#     'default': urllib3.ProxyManager(proxy_url=proxy_url, num_pools=3, maxsize=10, retries=False, timeout=30),
+# }
+# telepot.api._onetime_pool_spec = (urllib3.ProxyManager, dict(proxy_url=proxy_url, num_pools=1, maxsize=1, retries=False, timeout=30))
 
-os.environ['TZ'] = 'Asia/Kolkata'
-time.tzset()
+# os.environ['TZ'] = 'Asia/Kolkata'
+# time.tzset()
 
 
 config = open('config.json')
@@ -31,7 +31,7 @@ def fetch_id():
     response = requests.get(url).json()
     json_file = open('instruments.json', 'w')
     json.dump(response, json_file)
-    telegram_bot('Updated Instrument IDs.')
+    # telegram_bot('Updated Instrument IDs.')
 
 
 def get_id(symbol):
@@ -49,27 +49,27 @@ def deltaLogin():
     return deltaClient
 
 
-def message_bot():
-    API_KEY = config["telegram_api_key"]
-    bot = telebot.TeleBot(API_KEY)
-    telegram_bot("TeleBot Started.")
-    @bot.message_handler(commands=['isrunning'])
-    def isrunning(message):
-        bot.reply_to(message, 'Bot is Running.')
+# def message_bot():
+#     API_KEY = config["telegram_api_key"]
+#     bot = telebot.TeleBot(API_KEY)
+#     telegram_bot("TeleBot Started.")
+#     @bot.message_handler(commands=['isrunning'])
+#     def isrunning(message):
+#         bot.reply_to(message, 'Bot is Running.')
 
-    @bot.message_handler(commands=['avlbal'])
-    def greet(message):
-        bot.reply_to(message, usdt_balance())
+#     @bot.message_handler(commands=['avlbal'])
+#     def greet(message):
+#         bot.reply_to(message, usdt_balance())
 
-    @bot.message_handler(commands=['btcltp'])
-    def btcltp(message):
-        bot.reply_to(message, get_ltp("BTCUSDT"))
+#     @bot.message_handler(commands=['btcltp'])
+#     def btcltp(message):
+#         bot.reply_to(message, get_ltp("BTCUSDT"))
 
-    try:
-        bot.polling()
-    except:
-        telegram_bot("Bot Messenger Has Stopped \nRetrying")
-        message_bot()
+#     try:
+#         bot.polling()
+#     except:
+#         telegram_bot("Bot Messenger Has Stopped \nRetrying")
+#         message_bot()
 
 
 
