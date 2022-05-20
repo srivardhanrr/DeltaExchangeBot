@@ -4,18 +4,14 @@ import telebot
 from delta_rest_client import DeltaRestClient, OrderType, TimeInForce
 import json
 import math
-import time, os
-import requests
+import time
+import os
 import urllib3
 from threading import Thread
+import ccxt
 
 
-# proxy_url = "http://proxy.server:3128"
-# telepot.api._pools = {
-#     'default': urllib3.ProxyManager(proxy_url=proxy_url, num_pools=3, maxsize=10, retries=False, timeout=30),
-# }
-# telepot.api._onetime_pool_spec = (urllib3.ProxyManager, dict(proxy_url=proxy_url, num_pools=1, maxsize=1, retries=False, timeout=30))
-
+# Uncomment if using Web Server
 # os.environ['TZ'] = 'Asia/Kolkata'
 # time.tzset()
 
@@ -25,20 +21,27 @@ config = json.load(config)
 tries = 5
 
 
+# def fetch_id():
+#     url = 'https://api.delta.exchange/v2/products?contract_types=call_options,put_options&states=live'
+#     response = requests.get(url).json()
+#     json_file = open('instruments.json', 'w')
+#     json.dump(response, json_file)
+#     telegram_bot('Updated Instrument IDs.')
 
-def fetch_id():
-    url = 'https://api.delta.exchange/products'
-    response = requests.get(url).json()
-    json_file = open('instruments.json', 'w')
-    json.dump(response, json_file)
-    # telegram_bot('Updated Instrument IDs.')
+
+# def get_id(symbol):
+#     json_file = json.loads(open('instruments.json', 'r').read())['result']
+#     for i in json_file:
+#         if i['symbol'] == symbol:
+#             return i['id']
 
 
-def get_id(symbol):
-    json_file = json.loads(open('instruments.json', 'r').read())
-    for i in json_file:
-        if i['symbol'] == symbol:
-            return i['id']
+binance = ccxt.binance()
+
+delta = ccxt.delta({
+    'api_key': config['delta_api_key'],
+    'secret': config['delta_api_secret']})
+
 
 def deltaLogin():
     deltaClient = DeltaRestClient(
@@ -49,32 +52,48 @@ def deltaLogin():
     return deltaClient
 
 
-# def message_bot():
-#     API_KEY = config["telegram_api_key"]
-#     bot = telebot.TeleBot(API_KEY)
-#     telegram_bot("TeleBot Started.")
-#     @bot.message_handler(commands=['isrunning'])
-#     def isrunning(message):
-#         bot.reply_to(message, 'Bot is Running.')
-
-#     @bot.message_handler(commands=['avlbal'])
-#     def greet(message):
-#         bot.reply_to(message, usdt_balance())
-
-#     @bot.message_handler(commands=['btcltp'])
-#     def btcltp(message):
-#         bot.reply_to(message, get_ltp("BTCUSDT"))
-
-#     try:
-#         bot.polling()
-#     except:
-#         telegram_bot("Bot Messenger Has Stopped \nRetrying")
-#         message_bot()
+def lev_100x():
+    print("Started Leverage Change Bot.")
+    current_date = time.strftime("%y%m%d", time.localtime())
+    markets = delta.load_markets()
+    for market in markets:
+        if market[0:20] == f'BTC/USDT:USDT-{current_date}':
+            symbol = delta.fetch_ticker(market)['info']['product_id']
+            leverage = deltaClient.set_leverage(symbol, 100)
+    print("Done Leverage Change")
 
 
+def message_bot():
+    API_KEY = config["telegram_api_key"]
+    bot = telebot.TeleBot(API_KEY)
+    telegram_bot("TeleBot Started.")
+    @bot.message_handler(commands=['isrunning'])
+    def isrunning(message):
+        bot.reply_to(message, 'Bot is Running.')
+
+    @bot.message_handler(commands=['avlbal'])
+    def greet(message):
+        bot.reply_to(message, usdt_balance())
+
+    @bot.message_handler(commands=['btcltp'])
+    def btcltp(message):
+        bot.reply_to(message, get_ltp("BTCUSDT"))
+
+    try:
+        bot.polling()
+    except:
+        telegram_bot("Bot Messenger Has Stopped \nRetrying")
+        message_bot()
 
 
 def telegram_bot(bot_message):
+    
+##     Uncomment if using Web Server
+#     proxy_url = "http://proxy.server:3128"
+#     telepot.api._pools = {
+#         'default': urllib3.ProxyManager(proxy_url=proxy_url, num_pools=3, maxsize=10, retries=False, timeout=30),
+#     }
+#     telepot.api._onetime_pool_spec = (urllib3.ProxyManager, dict(proxy_url=proxy_url, num_pools=1, maxsize=1, retries=False, timeout=30))
     bot_message = str(bot_message)
     print(bot_message)
     token = config["telegram_api_key"]
@@ -149,18 +168,19 @@ def deltabot():
     # Fetch Symbol Token
     current_date = time.strftime("%d%m%y", time.localtime())
     symbol = f'C-BTC-{ce_strike}-{current_date}'
-    product_id = get_id(symbol)
+    telegram_bot(symbol)
+    product_id = delta_client.get_ticker(symbol)['product_id']
     if product_id is None:
         telegram_bot('Token not Found')
         telegram_bot('Trying Again with other Symbol.')
         ce_strike = int(ce_strike) - 1000
         symbol = f'C-BTC-{ce_strike}-{current_date}'
-        product_id = get_id(symbol)
+        product_id = delta_client.get_ticker(symbol)['product_id']
         if product_id is None:
             telegram_bot('Trying 2nd symbol')
             pe_strike = int(ce_strike)-4000
             symbol = f'P-BTC-{pe_strike}-{current_date}'
-            product_id = get_id(symbol)
+            product_id = delta_client.get_ticker(symbol)['product_id']
     telegram_bot(f'{symbol}, {product_id}')
     # OrderBook
     orderbook_bid = orderbook(product_id)[0]
@@ -170,7 +190,13 @@ def deltabot():
     balance = delta_client.get_balances(asset_id=5)['available_balance']
     telegram_bot(f"Available Balance: {balance}")
     # Quantity
-    cont = int(float(balance) / (ltp / 100000))
+    max_cont = 3700
+    quantity = int(float(balance) / (ltp / 100000))
+    if quantity <= max_cont:
+        cont = quantity
+    else:
+        telegram_bot("Condition Overthorwn: Max Quantity Exceeded")
+        cont = 0
     telegram_bot(f"Quantity: {cont}")
     # Set Leverage
     leverage = delta_client.set_leverage(product_id=product_id, leverage='100')
@@ -194,12 +220,19 @@ def deltabot():
         telegram_bot("No Balance!")
 
 
+reorder = []
+
+
 def live_orders():
+    current_date = time.strftime("%d%m%y", time.localtime())
     open_orders = delta_client.get_live_orders()
     if open_orders:
-        telegram_bot("------------------------------------")
+        telegram_bot("-"*35)
         telegram_bot('Found Existing Orders \n Cancelling Orders...')
         for orders in open_orders:
+            symbol = orders['product_symbol']
+            if symbol[12:] > current_date:
+                reorder.append(orders)
             cancelled = cancel_order(productId=orders['product_id'], orderId=orders['id'])
             telegram_bot(f"Cancelled {cancelled['product_symbol']}, Quantity: {cancelled['unfilled_size']}")
         telegram_bot('Cancelled Existing Orders. \n')
@@ -207,18 +240,29 @@ def live_orders():
         telegram_bot('Started Strategy Execution. \n')
         deltabot()
     else:
-        telegram_bot("------------------------------------")
+        telegram_bot("-"*35)
         telegram_bot('Started Strategy Execution. \n')
         deltabot()
+
+
+
+def re_order():
+    if reorder is not None:
+        telegram_bot('Re Ordering Started...')
+        for re in reorder:
+            repeat_order = place_order(productId=re['product_id'], size=re['size'], price=re['limit_price'], side=re['side'])
+            telegram_bot(f"\nRE Order Submitted \n"
+                         f"{repeat_order['side']} {repeat_order['size']} Contracts of {repeat_order['product_symbol']} at {repeat_order['limit_price']}")
+        reorder.clear()
+        telegram_bot("Successfully Executed Re-Ordering.")
 
 
 def sch_stry():
     schedule.every(120).minutes.do(usdt_balance)
     schedule.every(120).minutes.do(time_teller)
-    schedule.every().day.at('17:10:00').do(fetch_id)
+    schedule.every().day.at('00:01:00').do(lev_100x)
     schedule.every().day.at('17:25:00').do(live_orders)
-    schedule.every().day.at('18:00:00').do(fetch_id)
-    # schedule.every().day.at('19:31:00').do(exit)
+    schedule.every().day.at('17:31:00').do(re_order)
 
     while 1:
         schedule.run_pending()
@@ -227,4 +271,3 @@ def sch_stry():
 
 Thread(target=sch_stry).start()
 Thread(target=message_bot).start()
-
