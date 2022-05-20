@@ -5,3 +5,4 @@ telebot
 delta_rest_client 
 requests 
 urllib3 
+ccxt
