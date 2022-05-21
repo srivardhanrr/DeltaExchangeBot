@@ -1,17 +1,17 @@
+from delta_rest_client import DeltaRestClient, OrderType, TimeInForce
+from threading import Thread
+from datetime import datetime, timedelta
 import schedule
 import telepot
 import telebot
-from delta_rest_client import DeltaRestClient, OrderType, TimeInForce
+import ccxt
 import json
 import math
 import time
 import os
 import urllib3
-from threading import Thread
-import ccxt
 
-
-# Uncomment if using Web Server
+# Use when Using WEB Server
 # os.environ['TZ'] = 'Asia/Kolkata'
 # time.tzset()
 
@@ -52,43 +52,32 @@ def deltaLogin():
     return deltaClient
 
 
-def lev_100x():
-    print("Started Leverage Change Bot.")
-    current_date = time.strftime("%y%m%d", time.localtime())
-    markets = delta.load_markets()
-    for market in markets:
-        if market[0:20] == f'BTC/USDT:USDT-{current_date}':
-            symbol = delta.fetch_ticker(market)['info']['product_id']
-            leverage = deltaClient.set_leverage(symbol, 100)
-    print("Done Leverage Change")
 
 
-def message_bot():
-    API_KEY = config["telegram_api_key"]
-    bot = telebot.TeleBot(API_KEY)
-    telegram_bot("TeleBot Started.")
-    @bot.message_handler(commands=['isrunning'])
-    def isrunning(message):
-        bot.reply_to(message, 'Bot is Running.')
+# def message_bot():
+#     API_KEY = config["telegram_api_key"]
+#     bot = telebot.TeleBot(API_KEY)
+#     telegram_bot("TeleBot Started.")
+#     @bot.message_handler(commands=['isrunning'])
+#     def isrunning(message):
+#         bot.reply_to(message, 'Bot is Running.')
 
-    @bot.message_handler(commands=['avlbal'])
-    def greet(message):
-        bot.reply_to(message, usdt_balance())
+#     @bot.message_handler(commands=['avlbal'])
+#     def greet(message):
+#         bot.reply_to(message, usdt_balance())
 
-    @bot.message_handler(commands=['btcltp'])
-    def btcltp(message):
-        bot.reply_to(message, get_ltp("BTCUSDT"))
+#     @bot.message_handler(commands=['btcltp'])
+#     def btcltp(message):
+#         bot.reply_to(message, get_ltp("BTCUSDT"))
 
-    try:
-        bot.polling()
-    except:
-        telegram_bot("Bot Messenger Has Stopped \nRetrying")
-        message_bot()
+#     try:
+#         bot.polling()
+#     except:
+#         telegram_bot("Bot Messenger Has Stopped \nRetrying")
+#         message_bot()
 
 
 def telegram_bot(bot_message):
-    
-##     Uncomment if using Web Server
 #     proxy_url = "http://proxy.server:3128"
 #     telepot.api._pools = {
 #         'default': urllib3.ProxyManager(proxy_url=proxy_url, num_pools=3, maxsize=10, retries=False, timeout=30),
@@ -114,6 +103,23 @@ telegram_bot(f'\nAlgo Bot Started at {current_time} \n')
 
 
 delta_client = deltaLogin()
+
+
+def lev_100x():
+    telegram_bot("Started Leverage Change Bot.")
+    current_date = time.strftime("%y%m%d", time.localtime())
+    next_date = (datetime.now() + timedelta(days=1)).strftime('%y%m%d')
+    day_after_date = (datetime.now() + timedelta(days=2)).strftime('%y%m%d')
+    markets = delta.load_markets()
+    for market in markets:
+        try:
+            if market[0:20] == f'BTC/USDT:USDT-{current_date and next_date and day_after_date}':
+                symbol = delta.fetch_ticker(market)['info']['product_id']
+                delta_client.set_leverage(symbol, 100)
+        except:
+            pass
+            telegram_bot("Error Occurred!")
+    telegram_bot("Leverage Changed..")
 
 
 def place_order(productId, size, price, side='sell', order_type=OrderType.LIMIT, time_in_force=TimeInForce.GTC):
@@ -255,12 +261,13 @@ def re_order():
                          f"{repeat_order['side']} {repeat_order['size']} Contracts of {repeat_order['product_symbol']} at {repeat_order['limit_price']}")
         reorder.clear()
         telegram_bot("Successfully Executed Re-Ordering.")
+        telegram_bot("-"*40)
 
 
 def sch_stry():
     schedule.every(120).minutes.do(usdt_balance)
     schedule.every(120).minutes.do(time_teller)
-    schedule.every().day.at('00:01:00').do(lev_100x)
+    schedule.every().day.at('00:10:00').do(lev_100x)
     schedule.every().day.at('17:25:00').do(live_orders)
     schedule.every().day.at('17:31:00').do(re_order)
 
@@ -270,4 +277,4 @@ def sch_stry():
 
 
 Thread(target=sch_stry).start()
-Thread(target=message_bot).start()
+# Thread(target=message_bot).start()
